@@ -4,6 +4,8 @@
 # grcamp@cisco.com
 # ios_office365_acl_creator
 #
+# https://docs.microsoft.com/en-us/office365/enterprise/office-365-ip-web-service
+#
 #########################################################################
 
 import requests
