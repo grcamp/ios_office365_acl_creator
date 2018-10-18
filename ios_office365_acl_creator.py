@@ -153,12 +153,18 @@ def main(**kwargs):
         parser.add_argument('--email', help='Email File')
         args = parser.parse_args()
 
+    # Log status
+    logger.info("Starting Collection Worldwide Endpoints")
     # Get WorldWide IP List
     my_guid = str(uuid.uuid4())
     my_json = requests.get("https://endpoints.office.com/endpoints/worldwide?clientrequestid={}".format(my_guid)).text
     items = json.loads(my_json)
     items = convert_u_to_str(items)
+    # Log status
+    logger.info("Completed Collection Worldwide Endpoints")
 
+    # Log status
+    logger.info("Starting ACL Build")
     # Loop through each item to find ips
     for item in iter(items):
         # If TCP ports are found
@@ -170,9 +176,16 @@ def main(**kwargs):
             # Build ACL Lines
             lines += get_ios_acl_lines(item['ips'], 'udp', item['udpPorts'].split(','))
 
+    # Log status
+    logger.info("Completed ACL Build")
+    logger.info("Removing Duplicate ACL Entries")
+
+
     # Remove duplicates
     uniq_lines = list(OrderedDict.fromkeys(lines))
 
+    # Log status
+    logger.info("Writing to file {}".format(args.output_file))
     # Write file
     with open(args.output_file, 'w') as my_file:
         for line in uniq_lines:
