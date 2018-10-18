@@ -108,24 +108,31 @@ def get_ios_acl_lines(ips, protocol, ports):
     # Declare variables
     lines = []
 
+    # Loop through list of IPs
     for ip in ips:
-        if '-' in ports:
+        # Loop through list of ports
+        for port in ports:
+            # If IP is an ipv4 address
             if is_ip_address(ip.split('/')[0]):
-                line = " permit {} {} {} range {} any".format(protocol,
+                # Check if port is a range
+                if '-' in port:
+                    # Replace - with a space
+                    port = port.replace('-', ' ')
+                    # Set match keyword
+                    port_match = 'range'
+                # Else port is not a range
+                else:
+                    # Set match keyword
+                    port_match = 'eq'
+
+                # Build ACL Line
+                line = " permit {} {} {} {} {} any".format(protocol,
                                                            ip.split('/')[0],
                                                            cidr_to_wildcard_mask(ip.split('/')[1]),
-                                                           ports.replace('-', ' '))
+                                                           port_match,
+                                                           port)
+                # Append line to list
                 lines.append(line)
-        else:
-            port_list = ports.split(',')
-
-            for port in port_list:
-                if is_ip_address(ip.split('/')[0]):
-                    line = " permit {} {} {} eq {} any".format(protocol,
-                                                               ip.split('/')[0],
-                                                               cidr_to_wildcard_mask(ip.split('/')[1]),
-                                                               port)
-                    lines.append(line)
 
     # Return lines
     return lines
@@ -143,7 +150,6 @@ def main(**kwargs):
     else:
         parser = argparse.ArgumentParser()
         parser.add_argument('output_file', help='Output File')
-        parser.add_argument('--o365', action='store_true', default=False, help='Office 365 Product Type')
         parser.add_argument('--email', help='Email File')
         args = parser.parse_args()
 
@@ -153,20 +159,26 @@ def main(**kwargs):
     items = json.loads(my_json)
     items = convert_u_to_str(items)
 
-    # Loop through each item
+    # Loop through each item to find ips
     for item in iter(items):
+        # If TCP ports are found
         if 'ips' in item and 'tcpPorts' in item:
-            lines += get_ios_acl_lines(item['ips'], 'tcp', item['tcpPorts'])
+            # Build ACL Lines
+            lines += get_ios_acl_lines(item['ips'], 'tcp', item['tcpPorts'].split(','))
+        # If UDP ports are found
         if 'ips' in item and 'udpPorts' in item:
-            lines += get_ios_acl_lines(item['ips'], 'udp', item['udpPorts'])
+            # Build ACL Lines
+            lines += get_ios_acl_lines(item['ips'], 'udp', item['udpPorts'].split(','))
 
     # Remove duplicates
     uniq_lines = list(OrderedDict.fromkeys(lines))
 
+    # Write file
     with open(args.output_file, 'w') as my_file:
         for line in uniq_lines:
             my_file.write("{}\n".format(line))
 
+    # Email file
     if args.email:
         # Open file
         json_file = open(args.email, 'r')
