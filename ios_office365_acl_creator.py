@@ -38,10 +38,10 @@ def fatal(msg):
     logger.fatal(msg)
     exit(1)
 
-def is_ip_address(ipAddress):
+def is_ip_address(ip_address):
     # Return true if IP is valid, else return false
     try:
-        socket.inet_aton(ipAddress)
+        socket.inet_aton(ip_address)
         return True
     except socket.error:
         return False
@@ -104,16 +104,16 @@ def cidr_to_wildcard_mask(cidr):
 
     return wildcard
 
-def get_ios_acl_lines(ips, protocol, ports):
+def get_ios_acl_lines(office365_subnets, protocol, ports, direction, remote_object):
     # Declare variables
     lines = []
 
     # Loop through list of IPs
-    for ip in ips:
-        # Loop through list of ports
-        for port in ports:
-            # If IP is an ipv4 address
-            if is_ip_address(ip.split('/')[0]):
+    for subnet in office365_subnets:
+        # Check if subnet is an ipv4 subnet
+        if is_ip_address(subnet.split('/')[0]):
+            # Loop through list of ports
+            for port in ports:
                 # Check if port is a range
                 if '-' in port:
                     # Replace - with a space
@@ -125,12 +125,23 @@ def get_ios_acl_lines(ips, protocol, ports):
                     # Set match keyword
                     port_match = 'eq'
 
-                # Build ACL Line
-                line = " permit {} {} {} {} {} any".format(protocol,
-                                                           ip.split('/')[0],
-                                                           cidr_to_wildcard_mask(ip.split('/')[1]),
-                                                           port_match,
-                                                           port)
+                # Check direction of the ACL
+                if direction == "source":
+                    # Build ACL Line
+                    line = " permit {} {} {} {} {} {}".format(protocol,
+                                                              subnet.split('/')[0],
+                                                              cidr_to_wildcard_mask(subnet.split('/')[1]),
+                                                              port_match,
+                                                              port,
+                                                              remote_object)
+                else:
+                    # Build ACL Line
+                    line = " permit {} {} {} {} {} {}".format(protocol,
+                                                              remote_object,
+                                                              subnet.split('/')[0],
+                                                              cidr_to_wildcard_mask(subnet.split('/')[1]),
+                                                              port_match,
+                                                              port)
                 # Append line to list
                 lines.append(line)
 
@@ -140,7 +151,7 @@ def get_ios_acl_lines(ips, protocol, ports):
 def main(**kwargs):
     # Declare variables
     lines = []
-    lines.append('ip access-list extended OFFICE_365')
+    remote_subnets = []
 
     # Set logging
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format="%(asctime)s [%(levelname)8s]:  %(message)s")
@@ -151,7 +162,38 @@ def main(**kwargs):
         parser = argparse.ArgumentParser()
         parser.add_argument('output_file', help='Output File')
         parser.add_argument('--email', help='Email File')
+        parser.add_argument('--direction', help='source|destination (default: source)')
+        parser.add_argument('--subnets', help='File Containing list of subnets to match with ACL (default: any)')
         args = parser.parse_args()
+
+    # Verify direction argument and set to source if blank
+    if args.direction is None:
+        args.direction = "source"
+    elif (args.direction != "source") and (args.direction != "destination"):
+        fatal("Incorrect direction {} - Direction should be source or destination".format(args.direction))
+
+    # Verify subnets argument
+    if args.subnets is None:
+        remote_object = 'any'
+    else:
+        # Open file
+        with open(args.subnets, 'r') as subnet_file:
+            # Read file into a list
+            remote_subnets = [i for i in subnet_file]
+
+        # Build object group
+        lines.append('object-group network remote_subnets')
+        # Set remote object
+        remote_object = 'object-group remote_subnets'
+
+        # Loop through subnets and add to object-group
+        for remote_subnet in remote_subnets:
+            # Check if subnet is valid
+            if is_ip_address(remote_subnet.strip().split('/')[0]):
+                # Add all subnets to config
+                lines.append(" {} {}".format(remote_subnet.strip().split('/')[0],
+                                             cidr_to_netmask(remote_subnet.strip().split('/')[1])))
+
 
     # Log status
     logger.info("Starting Collection Worldwide Endpoints")
@@ -165,21 +207,21 @@ def main(**kwargs):
 
     # Log status
     logger.info("Starting ACL Build")
+    lines.append('ip access-list extended OFFICE_365')
     # Loop through each item to find ips
     for item in iter(items):
         # If TCP ports are found
         if 'ips' in item and 'tcpPorts' in item:
             # Build ACL Lines
-            lines += get_ios_acl_lines(item['ips'], 'tcp', item['tcpPorts'].split(','))
+            lines += get_ios_acl_lines(item['ips'], 'tcp', item['tcpPorts'].split(','), args.direction, remote_object)
         # If UDP ports are found
         if 'ips' in item and 'udpPorts' in item:
             # Build ACL Lines
-            lines += get_ios_acl_lines(item['ips'], 'udp', item['udpPorts'].split(','))
+            lines += get_ios_acl_lines(item['ips'], 'udp', item['udpPorts'].split(','), args.direction, remote_object)
 
     # Log status
     logger.info("Completed ACL Build")
     logger.info("Removing Duplicate ACL Entries")
-
 
     # Remove duplicates
     uniq_lines = list(OrderedDict.fromkeys(lines))
