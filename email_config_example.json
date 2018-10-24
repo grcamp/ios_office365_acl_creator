@@ -1,0 +1,8 @@
+{
+	"email": {
+			"smtp": "smtp.somewhere.com",
+			"from": "grcamp@somewhere.com",
+			"to": "someone@somewhere.com",
+			"cc": "someone_else@somewhere.com"
+			}
+}

@@ -4,7 +4,17 @@
 # grcamp@cisco.com
 # ios_office365_acl_creator
 #
+# Microsoft Web Service Documentation
 # https://docs.microsoft.com/en-us/office365/enterprise/office-365-ip-web-service
+#
+# Git Repository
+# https://github.com/grcamp/ios_office365_acl_creator
+#
+# Parameters:
+#   output_file:    (Required) File Name to Output ACL (will overwrite current file)
+#   --email:        (Optional) JSON Config file format below (See Example in Git Repository)
+#   --direction:    (Optional) Office 365 Subnets will be in the source|destination position (default:source)
+#   --subnets:      (Optional) File Containing list of remote subnets to match with ACL (See Example in GIT repository)
 #
 #########################################################################
 
@@ -27,7 +37,6 @@ from collections import OrderedDict
 # Declare global variables
 logger = logging.getLogger(__name__)
 
-
 def warning(msg):
     logger.warning(msg)
 
@@ -39,7 +48,10 @@ def fatal(msg):
     exit(1)
 
 def is_ip_address(ip_address):
-    # Return true if IP is valid, else return false
+    '''
+    :param ip_address: IP address as string
+    :return: Return true if IP is valid, else return false
+    '''
     try:
         socket.inet_aton(ip_address)
         return True
@@ -50,6 +62,16 @@ def is_ip_address(ip_address):
     return False
 
 def email_report(smtpServer, subject, body, filename, fromAddr, toAddr, ccAddr=""):
+    '''
+    :param smtpServer:
+    :param subject:
+    :param body:
+    :param filename:
+    :param fromAddr:
+    :param toAddr:
+    :param ccAddr:
+    :return:
+    '''
     logger.info("Emailing {}".format(filename))
 
     msg = MIMEMultipart()
@@ -76,7 +98,14 @@ def email_report(smtpServer, subject, body, filename, fromAddr, toAddr, ccAddr="
     server.sendmail(fromAddr, rcpt, text)
     server.quit()
 
+    # Return None
+    return None
+
 def convert_u_to_str(input):
+    '''
+    :param input: dictionary with unicode strings
+    :return: dictionary with all unicode strings converted to strings
+    '''
     if isinstance(input, dict):
         return {convert_u_to_str(key): convert_u_to_str(value) for key, value in input.iteritems()}
     elif isinstance(input, list):
@@ -87,6 +116,10 @@ def convert_u_to_str(input):
         return input
 
 def cidr_to_netmask(cidr):
+    '''
+    :param cidr: integer 0 - 32 signifying the subnet mask
+    :return: netmask string
+    '''
     cidr = int(cidr)
     mask = (0xffffffff >> (32 - cidr)) << (32 - cidr)
     return (str( (0xff000000 & mask) >> 24)   + '.' +
@@ -95,6 +128,10 @@ def cidr_to_netmask(cidr):
             str( (0x000000ff & mask)))
 
 def cidr_to_wildcard_mask(cidr):
+    '''
+    :param cidr: integer 0 - 32 signifying the subnet mask
+    :return: wildcard mask string
+    '''
     netmask = cidr_to_netmask(cidr)
 
     wildcard = str(abs(int(netmask.split('.')[0]) - 255)) + '.' + \
