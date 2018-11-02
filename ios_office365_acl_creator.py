@@ -141,6 +141,18 @@ def cidr_to_wildcard_mask(cidr):
 
     return wildcard
 
+def get_network_object_group(item):
+    # Declare variables
+    lines = []
+
+    # For each item
+    for ip in iter(item['ips']):
+
+
+
+    # Return lines
+    return lines
+
 def get_ios_acl_lines(office365_subnets, protocol, ports, direction, remote_object):
     # Declare variables
     lines = []
@@ -187,8 +199,8 @@ def get_ios_acl_lines(office365_subnets, protocol, ports, direction, remote_obje
 
 def main(**kwargs):
     # Declare variables
-    lines = []
-    remote_subnets = []
+    object_group_lines = []
+    office365_acl_lines = []
 
     # Set logging
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format="%(asctime)s [%(levelname)8s]:  %(message)s")
@@ -219,7 +231,7 @@ def main(**kwargs):
             remote_subnets = [i for i in subnet_file]
 
         # Build object group
-        lines.append('object-group network remote_subnets')
+        object_group_lines.append('object-group network remote_subnets')
         # Set remote object
         remote_object = 'object-group remote_subnets'
 
@@ -228,8 +240,8 @@ def main(**kwargs):
             # Check if subnet is valid
             if is_ip_address(remote_subnet.strip().split('/')[0]):
                 # Add all subnets to config
-                lines.append(" {} {}".format(remote_subnet.strip().split('/')[0],
-                                             cidr_to_netmask(remote_subnet.strip().split('/')[1])))
+                object_group_lines.append(" {} {}".format(remote_subnet.strip().split('/')[0],
+                                                          cidr_to_netmask(remote_subnet.strip().split('/')[1])))
 
 
     # Log status
@@ -248,7 +260,7 @@ def main(**kwargs):
     # Loop through each item to find ips
     for item in iter(items):
         # If TCP ports are found
-        if 'ips' in item and 'tcpPorts' in item:
+        if 'ips' in item and 'tcpPorts' in item and 'id' in item and 'serviceArea' in item:
             # Build ACL Lines
             lines += get_ios_acl_lines(item['ips'], 'tcp', item['tcpPorts'].split(','), args.direction, remote_object)
         # If UDP ports are found
